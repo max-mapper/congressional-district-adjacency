@@ -11,7 +11,8 @@
   "dependencies": {
     "turf": "0.0.114",
     "browser-request": "~0.3.1",
-    "async": "~0.2.10"
+    "async": "~0.2.10",
+    "data-table": "0.0.8"
   },
   "devDependencies": {
     "beefy": "~0.7.1",
