@@ -2,6 +2,9 @@ GLOBAL = window // hack to make the JSTS module inside turf work
 var turf = require('turf')
 var request = require('browser-request')
 var async = require('async')
+
+var THRESHOLD = 1000 // miles
+var BUFFER = 1 // miles
 var intersections = window.intersections = {}
 
 request('districts112.ldjson', function(err, resp, data) {
@@ -29,58 +32,54 @@ request('districts112.ldjson', function(err, resp, data) {
 
 function calculateIntersections(districtID, cb) {
   var num = districts.length
-  var batchSize = 20
-  var start = 0
-  var end = batchSize
   
   var queue = async.queue(intersect, 1)
   
-  addToQueue(start, end)
-  
   queue.drain = function() {
-    if (end === num) {
-      console.log("Done", intersections)
-      return cb()
-    }
-    start += batchSize
-    end += batchSize
-    if (end > num) {
-      end = num
-    }
-    addToQueue(start, end)
+    console.log("Done", intersections)
+    cb()
   }
   
-  function addToQueue(start, end) {
-    console.log(start + '-' + end + '/' + num)
-    for (var b = start; b < end; b++) {
-      if (districtID === b) continue
-      var districtA = districts[districtID]
-      var districtB = districts[b]
-      queue.push({A: districtA, B: districtB})
-    }
+  for (var b = 0; b < num; b++) {
+    if (districtID === b) continue
+    var districtA = districts[districtID]
+    var districtB = districts[b]
+    queue.push({A: districtA, B: districtB})
   }
 }
 
 function intersect(task, done) {
-  buffer(task.A.geojson, function(err, fcA) {
-    if (err) return done(err)
-    buffer(task.B.geojson, function(err, fcB) {
+  var fpA = task.A.geojson.coordinates[0][0]
+  var fpB = task.B.geojson.coordinates[0][0]
+  if (fpA[0].length) fpA = fpA[0]
+  if (fpB[0].length) fpB = fpB[0]
+
+  var point1 = turf.point(fpA[0], fpA[1])
+  var point2 = turf.point(fpB[0], fpB[1])
+
+  turf.distance(point1, point2, 'miles', function(err, distance) {
+    if (err) throw err
+    if (distance > THRESHOLD) return setTimeout(done, 50)
+    buffer(task.A.geojson, function(err, fcA) {
       if (err) return done(err)
-      turf.intersect(fcA, fcB, function(err, fc) {
+      buffer(task.B.geojson, function(err, fcB) {
         if (err) return done(err)
-        var feature = fc.features[0]
-        if (feature.geometries) feature = feature.geometries[0]
-        if (!feature || feature.coordinates.length === 0) return done()
-        addIntersection(task.A, task.B, feature)
-        console.log(task.A.DISTRICT, task.A.STATENAME, 'intersects with', task.B.DISTRICT, task.B.STATENAME)
-        done()
+        turf.intersect(fcA, fcB, function(err, fc) {
+          if (err) return setTimeout(done, 50)
+          var feature = fc.features[0]
+          if (feature.geometries) feature = feature.geometries[0]
+          if (!feature || feature.coordinates.length === 0) return setTimeout(done, 50)
+          addIntersection(task.A, task.B, feature)
+          console.log(task.A.DISTRICT, task.A.STATENAME, 'intersects with', task.B.DISTRICT, task.B.STATENAME)
+          setTimeout(done, 50)
+        })
       })
     })
   })
 }
 
 function buffer(geom, cb) {
-  turf.buffer({"type": "Feature", "geometry": geom }, 1, 'miles', function(err, bufferedFC) {
+  turf.buffer({"type": "Feature", "geometry": geom }, BUFFER, 'miles', function(err, bufferedFC) {
     cb(err, bufferedFC)
   })
 }
