@@ -6,6 +6,7 @@ var async = require('async')
 var THRESHOLD = 1000 // miles
 var BUFFER = 1 // miles
 var intersections = window.intersections = {}
+var count = 0
 
 request('districts112.ldjson', function(err, resp, data) {
   var districts = data.split('\n').map(function(json) {
@@ -49,6 +50,7 @@ function calculateIntersections(districtID, cb) {
 }
 
 function intersect(task, done) {
+  console.log(++count + '/' + districts.length)
   var fpA = task.A.geojson.coordinates[0][0]
   var fpB = task.B.geojson.coordinates[0][0]
   if (fpA[0].length) fpA = fpA[0]
